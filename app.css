@@ -1,0 +1,33 @@
+body {
+  font-family : Monaco;
+}
+
+.flex {
+
+  display : flex;
+}
+.flex h1 {
+    flex: 2;
+}
+
+.flex button {
+  flex: 1;
+}
+
+.card {
+font-size : 74px;
+    width : 100%;
+  margin : 25px;
+    height : 300px;
+    background-color : lightgrey;
+    border-radius : 22px;
+    padding : 20px;
+
+}
+
+button {
+
+  width : 50%;
+
+}
+
