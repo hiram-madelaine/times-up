@@ -10,8 +10,11 @@
               :playing :switch-team
               :switch-team :playing})
 
-(def app-state (atom {:state :init
+(def app-state (atom {:state :playing
+                      :round 1
+                      :timeout 5000
                       :team 0
+                      :nb-teams 2
                       :person-id 0
                       :score {0 0 1 0}
                       :persons [{:person "Henry Ford", :id 0} {:person "Bruce Spreegsteen", :id 1} {:person "Jean Cocteau", :id 2} {:person "Capitaine Crochet", :id 3}]}))
@@ -48,9 +51,10 @@
     om/IRenderState
     (render-state
      [this {:as state :keys [comm]}]
-     (dom/div #js {:className "flex"}
-              (dom/h1 nil (:title opts))
-              (dom/button #js {:onClick #(put! comm [:flow :start])} "Start")))))
+     (dom/div #js {:className "init"}
+              (dom/h1 #js {:className "message"} (:title opts))
+              (dom/button #js {:className "action"
+                               :onClick #(put! comm [:flow :start])} "Start")))))
 
 (defn card-view
   [card owner]
@@ -68,7 +72,7 @@
 (defn team-score
   [app view opts]
   (om/component
-   (dom/div nil (str "Team "(key app) " : " (val app)))))
+   (dom/div #js {:className "team-score"} (str "Team "(key app) " : " (val app)))))
 
 
 (defn score-view
@@ -77,7 +81,10 @@
     om/IRenderState
     (render-state
      [this state]
-     (apply dom/div nil (om/build-all team-score (:score app))))))
+     (dom/div #js {:className "information"}
+            (dom/div #js {:className "current-team"} (str "Team : " (:team app)))
+            (apply dom/div #js {:className "score"}
+             (om/build-all team-score (:score app)))))))
 
 
 (defn app-view
@@ -105,10 +112,12 @@
                                       (om/build score-view app)
                                       (dom/div #js {:className "flex"}
                                                (om/build card-view ((:persons app) (:person-id app)))
+                                               (when (< 1 (:round app))(om/build navigation-view app {:state state
+                                                                              :opts {:label "PASS"
+                                                                                     :cmd :KO}}))
                                                (om/build navigation-view app {:state state
                                                                               :opts {:label "OK"
-                                                                                     :cmd :OK}}))
-                                      )))))
+                                                                                     :cmd :OK}})))))))
 
 (om/root
   app-view
