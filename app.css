@@ -18,18 +18,23 @@ body {
 
 .information {
   display : flex;
+   justify-content: space-between;
 }
 
 
 .current-team {
+flex : 1;
 
-  flex : 1;
 }
 
+.current-round {
+ flex : 1;
+}
 
 .score {
-  flex : 1;
+
   display : flex;
+  flex : 1;
   justify-content: space-between;
 
 }

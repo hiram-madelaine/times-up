@@ -10,16 +10,59 @@
               :playing :switch-team
               :switch-team :playing})
 
-(def app-state (atom {:state :playing
+(def app-state (atom {:state :init
                       :round 1
-                      :timeout 5000
-                      :team 0
+                      :timeout 10000
+                      :team 1
                       :nb-teams 2
                       :person-id 0
-                      :score {0 0 1 0}
+                      :score {1 0 2 0}
                       :persons [{:person "Henry Ford", :id 0} {:person "Bruce Spreegsteen", :id 1} {:person "Jean Cocteau", :id 2} {:person "Capitaine Crochet", :id 3}]}))
 
-;;;;;;;;;;;;;;;;;;; Event handlers ;;;;;;;;;;;;;;;;;;;;;
+
+;######################### Business Functions #########################
+
+
+
+(defn inc-score
+  "Increment the score of current team"
+  [app]
+  (let [team (:team app)]
+   (update-in app [:score team] inc)))
+
+(defn end-of-round?
+  [app]
+  (let [nb-cards (count (:persons @app))
+        current (:person-id @app)]
+    (= (inc current) nb-cards)))
+
+
+(defn next-card
+  "Next card to guess.
+  If this was the last card of the deck then,restart à first card, shuffle and switch team."
+  [app]
+ (update-in app [:person-id] inc))
+
+
+(defn shuffle-deck
+  [app]
+  (-> app
+      (update-in [:persons] shuffle)
+      (assoc-in [:person-id] 0)))
+
+(defn switch-team
+  [app]
+  (let [{nb :nb-teams} app]
+   (update-in app [:team] #(if (zero? (mod % nb))
+                             1
+                             (inc %)))))
+
+
+(defn step
+  [app]
+  (update-in app [:state] states))
+
+;################# Event handlers #################
 
 
 (defmulti handle-event (fn [[cmd param] app owner] cmd))
@@ -27,23 +70,35 @@
 
 (defmethod handle-event :OK
  [_ app owner]
-  (let [team (:team @app)]
-    (om/transact! app [:score team] inc)
-    (om/transact! app [:person-id] inc)))
+  (if (end-of-round? app)
+    (do
+      (om/transact! app inc-score)
+      (put! (om/get-state owner [:comm]) [:flow :end-of-round]))
+    (om/transact! app  (comp inc-score next-card))))
+
 
 (defmethod handle-event :KO
   [_ app owner]
-  )
+  (om/transact! app next-card))
+
+
 
 (defmethod handle-event :flow
   [[_ from] app owner]
   (condp = from
    :start (do
             (om/transact! app [:state] states)
-            (let [comm (om/get-state owner [:comm])]
-             (go (<! (timeout 10000))
+            (let [comm (om/get-state owner [:comm])
+                  time-out (:timeout @app)]
+             (go (<! (timeout time-out))
                 (put! comm [:flow :times-up]))))
-    :times-up (om/transact! app [:state] states)))
+    :times-up (om/transact! app  (comp  switch-team step))
+    :end-of-round (om/transact! app (comp shuffle-deck switch-team step))))
+
+
+
+
+;###################### View Components #################
 
 (defn init-view
   [app owner opts]
@@ -75,6 +130,14 @@
    (dom/div #js {:className "team-score"} (str "Team "(key app) " : " (val app)))))
 
 
+(defn round-view
+  [app owner]
+  (dom/div #js {:className "current-round"} (str "Round : " app)))
+
+(defn team-view
+  [app owner]
+  (dom/div #js {:className "current-team"} (str "Team : " app)))
+
 (defn score-view
   [app owner]
   (reify
@@ -82,7 +145,8 @@
     (render-state
      [this state]
      (dom/div #js {:className "information"}
-            (dom/div #js {:className "current-team"} (str "Team : " (:team app)))
+            (om/build round-view (:round app))
+            (om/build team-view (:team app))
             (apply dom/div #js {:className "score"}
              (om/build-all team-score (:score app)))))))
 
@@ -103,13 +167,15 @@
                        (recur))))))
     om/IRenderState
     (render-state [this state]
-                  (condp = (:state app)
+                  (dom/div #js {:className "game "}
+                           (om/build score-view app)
+                   (condp = (:state app)
                     :init (om/build init-view app {:state state
                                                    :opts {:title "Welcome to Time's up"}})
                     :switch-team (om/build init-view app {:state state
                                                    :opts {:title "Changement d'équipe"}})
                     :playing (dom/div nil
-                                      (om/build score-view app)
+
                                       (dom/div #js {:className "flex"}
                                                (om/build card-view ((:persons app) (:person-id app)))
                                                (when (< 1 (:round app))(om/build navigation-view app {:state state
@@ -117,7 +183,7 @@
                                                                                      :cmd :KO}}))
                                                (om/build navigation-view app {:state state
                                                                               :opts {:label "OK"
-                                                                                     :cmd :OK}})))))))
+                                                                                     :cmd :OK}}))))))))
 
 (om/root
   app-view
