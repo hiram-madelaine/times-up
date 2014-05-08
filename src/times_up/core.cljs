@@ -30,6 +30,11 @@
   (let [team (:team app)]
    (update-in app [:score team] inc)))
 
+(defn inc-round
+  "Increment the round"
+  [app]
+  (update-in app [:round] inc))
+
 (defn end-of-round?
   [app]
   (let [nb-cards (count (:persons @app))
@@ -59,6 +64,7 @@
 
 
 (defn step
+  "Decide what is the next state."
   [app]
   (update-in app [:state] states))
 
@@ -73,7 +79,7 @@
   (if (end-of-round? app)
     (do
       (om/transact! app inc-score)
-      (put! (om/get-state owner [:comm]) [:flow :end-of-round]))
+      (put! (om/get-state owner [:comm]) [:end-of-round]))
     (om/transact! app  (comp inc-score next-card))))
 
 
@@ -82,20 +88,23 @@
   (om/transact! app next-card))
 
 
+(defmethod handle-event :start
+  [_ app owner]
+  (do
+    (om/transact! app [:state] states)
+    (let [comm (om/get-state owner [:comm])
+          time-out (:timeout @app)]
+      (go (<! (timeout time-out))
+          (>! comm [:times-up (select-keys @app [:round :team :state])])))))
 
-(defmethod handle-event :flow
-  [[_ from] app owner]
-  (condp = from
-   :start (do
-            (om/transact! app [:state] states)
-            (let [comm (om/get-state owner [:comm])
-                  time-out (:timeout @app)]
-             (go (<! (timeout time-out))
-                (put! comm [:flow :times-up]))))
-    :times-up (om/transact! app  (comp  switch-team step))
-    :end-of-round (om/transact! app (comp shuffle-deck switch-team step))))
+(defmethod handle-event :times-up
+  [[_ s] app owner]
+  (let [_ (prn s)]
+   (when (= :playing (:state s))(om/transact! app  (comp switch-team step)))))
 
-
+(defmethod handle-event :end-of-round
+  [_ app owner]
+  (om/transact! app (comp shuffle-deck switch-team inc-round step)))
 
 
 ;###################### View Components #################
@@ -109,7 +118,7 @@
      (dom/div #js {:className "init"}
               (dom/h1 #js {:className "message"} (:title opts))
               (dom/button #js {:className "action"
-                               :onClick #(put! comm [:flow :start])} "Start")))))
+                               :onClick #(put! comm [:start])} "Start")))))
 
 (defn card-view
   [card owner]
