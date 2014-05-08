@@ -18,4 +18,12 @@
                 :output-to "times_up.js"
                 :output-dir "out"
                 :optimizations :none
-                :source-map true}}]})
+                :source-map true}}
+             {:id "release"
+              :source-paths ["src"]
+              :compiler {
+              :output-to "main.js"
+              :optimizations :advanced
+              :pretty-print false
+              :preamble ["react/react.min.js"]
+              :externs ["react/externs/react.js"]}}]})
